@@ -41,8 +41,10 @@ $Actual = (Get-FileHash -Algorithm SHA256 $Tmp).Hash.ToLower()
 if ($Actual -ne $Expected) { Write-Error "checksum mismatch: expected $Expected, got $Actual"; Remove-Item -Force $Tmp, $SumsFile -ErrorAction SilentlyContinue; exit 1 }
 
 # --- optional Ed25519 signature verification ---
-$PubKey = Join-Path $PSScriptRoot "public_key.pem"
-if ((Test-Path $PubKey) -and (Get-Command openssl -ErrorAction SilentlyContinue)) {
+# $PSScriptRoot is empty when run via `irm ... | iex` (no file on disk), so
+# there is no local public_key.pem to verify against — skip in that case.
+$PubKey = if ($PSScriptRoot) { Join-Path $PSScriptRoot "public_key.pem" } else { $null }
+if ($PubKey -and (Test-Path $PubKey) -and (Get-Command openssl -ErrorAction SilentlyContinue)) {
     try {
         $Sig = (Invoke-RestMethod $SigUrl).Trim()
         $SigFile = "$Tmp.sig"
