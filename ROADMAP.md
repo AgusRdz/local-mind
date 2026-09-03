@@ -67,15 +67,17 @@ Kill the alias-curation rot and keep the index fresh with zero thought.
 
 ---
 
-## M5 — Distribution ☐
-Ship it like chop: signed, checksummed, self-updating.
+## M5 — Distribution ◐
+Ship it like chop: signed, checksummed.
 
-- `install.ps1` + `install.sh` (download latest release, SHA256 verify, PATH wiring).
-- `.github/workflows`: `ci.yml` (test on push/PR) + `release.yml` (cross-build, checksums, sign, GitHub Release, provenance attestation) on `v*` tags.
-- `update` command (self-update from latest release) — optional, mirrors chop's updater.
-- `README.md`: install, config, the two-tier model, privacy gate, uninstall.
+- ☑ `install.ps1` + `install.sh` — private-repo aware (gh-first, token fallback), SHA256 verify, optional Ed25519 signature verify, PATH wiring.
+- ☑ `.github/workflows`: `ci.yml` (test on push/PR) + `release.yml` (cross-build 5 targets, checksums, optional sign, GitHub Release + generated notes, provenance attestation) on `v*` tags.
+- ☑ `README.md` + `docs/RELEASING.md` (signing setup, release + install steps).
+- ☐ Push the workflows (blocked on `gh auth refresh -s workflow`).
+- ☐ Cut `v0.1.0` and verify install from the release.
+- ☐ (deferred) `update` self-update command; skipped Homebrew tap (private repo).
 
-**Done when:** a `v0.1.0` tag produces a GitHub Release with signed cross-platform binaries + checksums, and `install.sh`/`install.ps1` install and verify a binary from it.
+**Done when:** a `v0.1.0` tag produces a GitHub Release with cross-platform binaries + checksums, and `install.sh`/`install.ps1` install and verify a binary from it.
 
 ---
 
