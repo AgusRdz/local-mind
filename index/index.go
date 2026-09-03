@@ -356,6 +356,10 @@ func buildMatch(query string) string {
 	return strings.Join(quoted, " OR ")
 }
 
+// Ignored reports whether a path matches any of the ignore globs. Exported for
+// reuse by batch commands that walk the same sources.
+func Ignored(path string, globs []string) bool { return ignored(path, globs) }
+
 func ignored(path string, globs []string) bool {
 	unix := filepath.ToSlash(path)
 	for _, g := range globs {

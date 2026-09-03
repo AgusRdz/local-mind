@@ -482,7 +482,7 @@ usage:
   local-mind bad                       flag the last injection as unhelpful
   local-mind config <cmd>              show | path | edit | set <k> <v> | add-source | add-ignore
   local-mind update                    self-update to the latest signed release
-  local-mind suggest-aliases <path>    propose frontmatter aliases via the claude CLI
+  local-mind suggest-aliases <path>|--all   propose frontmatter aliases via the claude CLI
   local-mind hook                      hook entrypoint (reads stdin JSON)
   local-mind version                   print version
 

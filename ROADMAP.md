@@ -57,13 +57,14 @@ Turn live use into the quality data Stage 0 would have gathered.
 
 ---
 
-## M4 — Authoring aids ◐
+## M4 — Authoring aids ☑
 Kill the alias-curation rot and keep the index fresh with zero thought.
 
 - ☑ `suggest-aliases <path> [--dry-run] [--yes] [--model]`: offline `claude -p` call proposing `aliases` + a description (only if missing); shows current vs proposed, writes valid frontmatter on confirm (inline/block/no-frontmatter all handled). Read-time path stays LLM-free.
-- ☐ (deferred) git `post-commit` snippet to auto-reindex changed notes; batch `suggest-aliases --all`.
+- ☑ `suggest-aliases --all [--force]`: batch-backfill every note missing aliases (respects sources + ignore globs), one confirm, per-note progress, skips already-aliased notes so it's resumable.
+- ☐ (deferred) git `post-commit` snippet to auto-reindex changed notes.
 
-**Done:** `suggest-aliases` proposes aliases and writes valid frontmatter that `rebuild` then indexes; frontmatter surgery covered by unit tests.
+**Done:** `suggest-aliases` (single + batch) proposes aliases and writes valid frontmatter that `rebuild` then indexes; frontmatter surgery + note collection covered by unit tests.
 
 ---
 

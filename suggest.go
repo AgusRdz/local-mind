@@ -8,15 +8,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/AgusRdz/local-mind/config"
+	"github.com/AgusRdz/local-mind/index"
 )
 
-// cmdSuggestAliases proposes aliases (and a description if missing) for a note
-// using the `claude` CLI at authoring time, then writes them into frontmatter
-// on confirmation. Retrieval stays LLM-free — this touches the write path only.
+// cmdSuggestAliases proposes aliases (and a description if missing) using the
+// `claude` CLI at authoring time, then writes them into frontmatter on confirm.
+// Single-note by default; `--all` backfills every note missing aliases.
+// Retrieval stays LLM-free — this touches the write path only.
 func cmdSuggestAliases(args []string) {
 	dryRun := hasFlag(args, "--dry-run")
 	yes := hasFlag(args, "--yes")
+	all := hasFlag(args, "--all")
+	force := hasFlag(args, "--force")
 	model := flagValue(args, "--model")
+
+	if all {
+		runBatch(dryRun, yes, force, model)
+		return
+	}
 
 	path := ""
 	for i := 0; i < len(args); i++ {
@@ -32,31 +43,25 @@ func cmdSuggestAliases(args []string) {
 		break
 	}
 	if path == "" {
-		fmt.Fprintln(os.Stderr, "usage: local-mind suggest-aliases <path> [--dry-run] [--yes] [--model <name>]")
+		fmt.Fprintln(os.Stderr, "usage: local-mind suggest-aliases <path>|--all [--dry-run] [--yes] [--force] [--model <name>]")
 		os.Exit(1)
 	}
+	runSingle(path, dryRun, yes, model)
+}
 
-	raw, err := os.ReadFile(path)
+func runSingle(path string, dryRun, yes bool, model string) {
+	raw, sug, setDesc, curAliases, err := propose(path, model)
 	fail(err)
-
-	name, desc, aliases, body := parseForSuggest(raw, path)
-
-	suggestion, err := askModel(name, desc, aliases, body, model)
-	fail(err)
-	if len(suggestion.Aliases) == 0 {
+	if len(sug.Aliases) == 0 {
 		fmt.Println("model proposed no aliases; nothing to do")
 		return
 	}
-
-	setDesc := strings.TrimSpace(desc) == "" && strings.TrimSpace(suggestion.Description) != ""
-
 	fmt.Printf("note: %s\n", path)
-	fmt.Printf("  current aliases:  %s\n", orNone(aliases))
-	fmt.Printf("  proposed aliases: %s\n", strings.Join(suggestion.Aliases, ", "))
+	fmt.Printf("  current aliases:  %s\n", orNone(curAliases))
+	fmt.Printf("  proposed aliases: %s\n", strings.Join(sug.Aliases, ", "))
 	if setDesc {
-		fmt.Printf("  proposed description (was empty): %s\n", suggestion.Description)
+		fmt.Printf("  proposed description (was empty): %s\n", sug.Description)
 	}
-
 	if dryRun {
 		return
 	}
@@ -64,15 +69,131 @@ func cmdSuggestAliases(args []string) {
 		fmt.Println("aborted")
 		return
 	}
+	fail(applyProposal(path, raw, sug, setDesc))
+	fmt.Println("updated frontmatter — run `local-mind rebuild --incremental` to index it")
+}
 
+func runBatch(dryRun, yes, force bool, model string) {
+	cfg, err := config.Load()
+	fail(err)
+	notes, skipped := collectNotes(cfg, force)
+	if len(notes) == 0 {
+		fmt.Printf("no notes to process (%d already have aliases)\n", skipped)
+		return
+	}
+	action := "process"
+	if dryRun {
+		action = "preview"
+	}
+	fmt.Printf("%s %d note(s) missing aliases (%d already have them)\n", action, len(notes), skipped)
+	if force {
+		fmt.Println("(--force: existing aliases will be overwritten)")
+	}
+	if !dryRun && !yes && !confirm(fmt.Sprintf("run the claude CLI on %d note(s)?", len(notes))) {
+		fmt.Println("aborted")
+		return
+	}
+
+	applied, failedN := 0, 0
+	for i, path := range notes {
+		raw, sug, setDesc, _, err := propose(path, model)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[%d/%d] %s — SKIP: %v\n", i+1, len(notes), rel2(path), err)
+			failedN++
+			continue
+		}
+		if len(sug.Aliases) == 0 {
+			fmt.Printf("[%d/%d] %s — no aliases proposed\n", i+1, len(notes), rel2(path))
+			continue
+		}
+		fmt.Printf("[%d/%d] %s\n    %s\n", i+1, len(notes), rel2(path), strings.Join(sug.Aliases, ", "))
+		if dryRun {
+			continue
+		}
+		if err := applyProposal(path, raw, sug, setDesc); err != nil {
+			fmt.Fprintf(os.Stderr, "    write failed: %v\n", err)
+			failedN++
+			continue
+		}
+		applied++
+	}
+
+	fmt.Println()
+	if dryRun {
+		fmt.Printf("previewed %d note(s) (%d errors)\n", len(notes), failedN)
+		return
+	}
+	fmt.Printf("updated %d note(s) (%d errors) — run `local-mind rebuild --incremental` to index them\n", applied, failedN)
+}
+
+// collectNotes walks the configured sources and returns .md paths that are
+// missing aliases (or all of them when force is set), plus a skipped count.
+func collectNotes(cfg config.Config, force bool) (notes []string, skipped int) {
+	seen := map[string]bool{}
+	for _, root := range cfg.Sources {
+		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if !strings.EqualFold(filepath.Ext(path), ".md") {
+				return nil
+			}
+			if index.Ignored(path, cfg.Ignore) || seen[path] {
+				return nil
+			}
+			seen[path] = true
+			raw, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return nil
+			}
+			_, _, aliases, _ := parseForSuggest(raw, path)
+			if !force && strings.TrimSpace(aliases) != "" {
+				skipped++
+				return nil
+			}
+			notes = append(notes, path)
+			return nil
+		})
+	}
+	return notes, skipped
+}
+
+// propose reads a note and asks the model for aliases + a description.
+func propose(path, model string) (raw []byte, sug suggestion, setDesc bool, curAliases string, err error) {
+	raw, err = os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	name, desc, aliases, body := parseForSuggest(raw, path)
+	curAliases = aliases
+	sug, err = askModel(name, desc, aliases, body, model)
+	if err != nil {
+		return
+	}
+	setDesc = strings.TrimSpace(desc) == "" && strings.TrimSpace(sug.Description) != ""
+	return
+}
+
+func applyProposal(path string, raw []byte, sug suggestion, setDesc bool) error {
 	descToWrite := ""
 	if setDesc {
-		descToWrite = suggestion.Description
+		descToWrite = sug.Description
 	}
-	updated, err := upsertFrontmatter(raw, path, suggestion.Aliases, descToWrite)
-	fail(err)
-	fail(os.WriteFile(path, updated, 0o644))
-	fmt.Println("updated frontmatter — run `local-mind rebuild --incremental` to index it")
+	updated, err := upsertFrontmatter(raw, path, sug.Aliases, descToWrite)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, updated, 0o644)
+}
+
+// rel2 shortens a path to its last two segments for progress output.
+func rel2(path string) string {
+	p := strings.ReplaceAll(path, "\\", "/")
+	parts := strings.Split(p, "/")
+	if len(parts) <= 2 {
+		return p
+	}
+	return strings.Join(parts[len(parts)-2:], "/")
 }
 
 type suggestion struct {

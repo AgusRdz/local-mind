@@ -1,9 +1,49 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/AgusRdz/local-mind/config"
 )
+
+func TestCollectNotes_MissingVsForceVsIgnore(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("has.md", "---\nname: has\naliases: [x]\n---\nbody")
+	write("missing.md", "---\nname: missing\n---\nbody")
+	write("templates/tpl.md", "---\nname: tpl\n---\nbody") // ignored
+
+	cfg := config.Config{Sources: []string{root}, Ignore: []string{"**/templates/**"}}
+
+	notes, skipped := collectNotes(cfg, false)
+	if len(notes) != 1 || filepath.Base(notes[0]) != "missing.md" {
+		t.Fatalf("default: expected only missing.md, got %v", notes)
+	}
+	if skipped != 1 {
+		t.Errorf("expected 1 skipped (has aliases), got %d", skipped)
+	}
+
+	forced, _ := collectNotes(cfg, true)
+	if len(forced) != 2 {
+		t.Errorf("--force: expected both non-ignored notes, got %d (%v)", len(forced), forced)
+	}
+	for _, p := range forced {
+		if strings.Contains(filepath.ToSlash(p), "/templates/") {
+			t.Error("ignored templates note should never be collected")
+		}
+	}
+}
 
 func TestUpsertFrontmatter_ReplaceInlineAliases(t *testing.T) {
 	src := []byte("---\nname: wt\ndescription: git worktrees\naliases: [old one]\n---\nbody here\n")
