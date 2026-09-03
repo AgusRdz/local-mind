@@ -57,14 +57,13 @@ Turn live use into the quality data Stage 0 would have gathered.
 
 ---
 
-## M4 — Authoring aids ☐
+## M4 — Authoring aids ◐
 Kill the alias-curation rot and keep the index fresh with zero thought.
 
-- `suggest-aliases <path>`: offline model call (via `claude -p` or API) proposing `aliases` + a tight `description`; prints a diff, applies on confirm. Read-time path stays LLM-free.
-- Auto-boost structural fields already covered in M1; here add a `rebuild --stale` that only touches files changed since last index (git-aware).
-- Optional git `post-commit` snippet (documented, not force-installed) to reindex changed notes automatically.
+- ☑ `suggest-aliases <path> [--dry-run] [--yes] [--model]`: offline `claude -p` call proposing `aliases` + a description (only if missing); shows current vs proposed, writes valid frontmatter on confirm (inline/block/no-frontmatter all handled). Read-time path stays LLM-free.
+- ☐ (deferred) git `post-commit` snippet to auto-reindex changed notes; batch `suggest-aliases --all`.
 
-**Done when:** `suggest-aliases` on an alias-less note proposes sensible aliases and, on confirm, writes valid frontmatter that M1 then indexes.
+**Done:** `suggest-aliases` proposes aliases and writes valid frontmatter that `rebuild` then indexes; frontmatter surgery covered by unit tests.
 
 ---
 
