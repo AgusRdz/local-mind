@@ -56,14 +56,14 @@ git tag v0.1.0 && git push origin v0.1.0
 ## Installing a published release
 
 ```bash
-# Linux / macOS / Git-Bash (uses your gh login for the private repo)
+# Linux / macOS / Git-Bash
 curl -fsSL https://raw.githubusercontent.com/AgusRdz/local-mind/main/install.sh | sh
 
 # Windows PowerShell
 irm https://raw.githubusercontent.com/AgusRdz/local-mind/main/install.ps1 | iex
 ```
 
-Both prefer the `gh` CLI (using your existing login, required for a private
-repo) and fall back to `GITHUB_TOKEN`/`GH_TOKEN`. They verify the SHA256
-checksum always, and the Ed25519 signature when `public_key.pem` is alongside
-the script.
+The scripts resolve the latest version, download the right binary, and verify
+the SHA256 checksum always — plus the Ed25519 signature when `public_key.pem`
+sits alongside the script and signing is enabled. Override the target with
+`LOCAL_MIND_VERSION` / `LOCAL_MIND_INSTALL_DIR`.

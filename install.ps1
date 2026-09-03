@@ -1,94 +1,58 @@
 $ErrorActionPreference = "Stop"
 
-# local-mind installer (Windows PowerShell).
-#
-# local-mind is a PRIVATE repo, so release assets require authentication.
-# Prefers the GitHub CLI (`gh`, using your existing login) and falls back to
-# Invoke-WebRequest with a token from $env:GITHUB_TOKEN / $env:GH_TOKEN.
-
 $Repo = "AgusRdz/local-mind"
 $InstallDir = if ($env:LOCAL_MIND_INSTALL_DIR) { $env:LOCAL_MIND_INSTALL_DIR } else { "$env:LOCALAPPDATA\Programs\local-mind" }
 
 $Arch = if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { "arm64" } else { "amd64" }
 $Binary = "local-mind-windows-$Arch.exe"
 
-function Have-Gh {
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return $false }
-    gh auth status 2>$null | Out-Null
-    return ($LASTEXITCODE -eq 0)
-}
-
-$UseGh = Have-Gh
-$Token = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } else { $env:GH_TOKEN }
-
 # --- resolve version ---
-$Version = $env:LOCAL_MIND_VERSION
-if (-not $Version) {
-    if ($UseGh) {
-        $Version = (gh release view --repo $Repo --json tagName -q .tagName 2>$null)
-    } elseif ($Token) {
-        $rel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $Token" } "https://api.github.com/repos/$Repo/releases/latest"
-        $Version = $rel.tag_name
-    } else {
-        Write-Error "need gh CLI logged in, or `$env:GITHUB_TOKEN set (private repo)"; exit 1
-    }
+if (-not $env:LOCAL_MIND_VERSION) {
+    $Release = Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest"
+    $env:LOCAL_MIND_VERSION = $Release.tag_name
 }
-if (-not $Version) { Write-Error "failed to determine latest version"; exit 1 }
+if (-not $env:LOCAL_MIND_VERSION) { Write-Error "failed to determine latest version"; exit 1 }
+
+$Version = $env:LOCAL_MIND_VERSION
+$Url = "https://github.com/$Repo/releases/download/$Version/$Binary"
+$ChecksumsUrl = "https://github.com/$Repo/releases/download/$Version/checksums.txt"
+$SigUrl = "https://github.com/$Repo/releases/download/$Version/checksums.txt.sig"
 
 Write-Host "installing local-mind $Version (windows/$Arch)..."
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-$Work = Join-Path ([System.IO.Path]::GetTempPath()) ("lm-" + [System.Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Force -Path $Work | Out-Null
 
+$Destination = Join-Path $InstallDir "local-mind.exe"
+$Tmp = "$Destination.tmp"
+Invoke-WebRequest -Uri $Url -OutFile $Tmp
+
+# --- verify SHA256 ---
 try {
-    if ($UseGh) {
-        gh release download $Version --repo $Repo --dir $Work --pattern $Binary --pattern "checksums.txt" --pattern "checksums.txt.sig" 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            gh release download $Version --repo $Repo --dir $Work --pattern $Binary --pattern "checksums.txt"
-        }
-    } else {
-        $base = "https://api.github.com/repos/$Repo/releases"
-        $tagRel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $Token" } "$base/tags/$Version"
-        function Get-Asset($name) {
-            $asset = $tagRel.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1
-            if (-not $asset) { return $false }
-            Invoke-WebRequest -Headers @{ Authorization = "Bearer $Token"; Accept = "application/octet-stream" } `
-                -Uri $asset.url -OutFile (Join-Path $Work $name)
-            return $true
-        }
-        if (-not (Get-Asset $Binary)) { Write-Error "failed to download $Binary"; exit 1 }
-        if (-not (Get-Asset "checksums.txt")) { Write-Error "failed to download checksums.txt"; exit 1 }
-        Get-Asset "checksums.txt.sig" | Out-Null
-    }
-
-    $BinPath = Join-Path $Work $Binary
-    if (-not (Test-Path $BinPath)) { Write-Error "binary not found after download"; exit 1 }
-
-    # --- verify SHA256 ---
-    $checks = Get-Content (Join-Path $Work "checksums.txt")
-    $line = $checks | Where-Object { $_ -match "\s$([regex]::Escape($Binary))$" } | Select-Object -First 1
-    if (-not $line) { Write-Error "checksum not found for $Binary"; exit 1 }
-    $Expected = ($line -split '\s+')[0].Trim().ToLower()
-    $Actual = (Get-FileHash -Algorithm SHA256 $BinPath).Hash.ToLower()
-    if ($Actual -ne $Expected) { Write-Error "checksum mismatch: expected $Expected, got $Actual"; exit 1 }
-
-    # --- optional signature verification ---
-    $sigFile = Join-Path $Work "checksums.txt.sig"
-    $pubKey = Join-Path $PSScriptRoot "public_key.pem"
-    if ((Test-Path $sigFile) -and (Test-Path $pubKey) -and (Get-Command openssl -ErrorAction SilentlyContinue)) {
-        $sigBin = Join-Path $Work "checksums.txt.sig.bin"
-        $hex = (Get-Content $sigFile -Raw).Trim()
-        [System.IO.File]::WriteAllBytes($sigBin, ($hex -split '(..)' | Where-Object { $_ } | ForEach-Object { [Convert]::ToByte($_, 16) }))
-        & openssl pkeyutl -verify -pubin -inkey $pubKey -rawin -in (Join-Path $Work "checksums.txt") -sigfile $sigBin *> $null
-        if ($LASTEXITCODE -eq 0) { Write-Host "signature verified" } else { Write-Warning "signature verification failed" }
-    }
-
-    $Destination = Join-Path $InstallDir "local-mind.exe"
-    Move-Item -Force $BinPath $Destination
-    Write-Host "installed local-mind to $Destination"
-} finally {
-    Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue
+    $Checksums = Invoke-RestMethod $ChecksumsUrl
+} catch {
+    Write-Error "failed to download checksums.txt: $_"; Remove-Item -Force $Tmp -ErrorAction SilentlyContinue; exit 1
 }
+$Line = $Checksums -split "`n" | Where-Object { $_ -match "\s$([regex]::Escape($Binary))$" } | Select-Object -First 1
+if (-not $Line) { Write-Error "checksum not found for $Binary"; Remove-Item -Force $Tmp -ErrorAction SilentlyContinue; exit 1 }
+$Expected = ($Line -split '\s+')[0].Trim().ToLower()
+$Actual = (Get-FileHash -Algorithm SHA256 $Tmp).Hash.ToLower()
+if ($Actual -ne $Expected) { Write-Error "checksum mismatch: expected $Expected, got $Actual"; Remove-Item -Force $Tmp -ErrorAction SilentlyContinue; exit 1 }
+
+# --- optional Ed25519 signature verification ---
+$PubKey = Join-Path $PSScriptRoot "public_key.pem"
+if ((Test-Path $PubKey) -and (Get-Command openssl -ErrorAction SilentlyContinue)) {
+    try {
+        $Sig = (Invoke-RestMethod $SigUrl).Trim()
+        $SumsFile = "$Tmp.sums"; $SigFile = "$Tmp.sig"
+        [System.IO.File]::WriteAllText($SumsFile, $Checksums)
+        [System.IO.File]::WriteAllBytes($SigFile, ($Sig -split '(..)' | Where-Object { $_ } | ForEach-Object { [Convert]::ToByte($_, 16) }))
+        & openssl pkeyutl -verify -pubin -inkey $PubKey -rawin -in $SumsFile -sigfile $SigFile *> $null
+        if ($LASTEXITCODE -eq 0) { Write-Host "signature verified" } else { Write-Warning "signature verification failed" }
+        Remove-Item -Force $SumsFile, $SigFile -ErrorAction SilentlyContinue
+    } catch { }
+}
+
+Move-Item -Force $Tmp $Destination
+Write-Host "installed local-mind to $Destination"
 
 # --- PATH wiring ---
 $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
