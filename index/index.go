@@ -108,6 +108,20 @@ func OpenAt(dbPath string) (*Index, error) {
 
 func (i *Index) Close() error { return i.db.Close() }
 
+// Count returns the total number of indexed notes.
+func (i *Index) Count() (int, error) {
+	var n int
+	err := i.db.QueryRow(`SELECT count(*) FROM notes`).Scan(&n)
+	return n, err
+}
+
+// PrivateCount returns how many indexed notes are marked private.
+func (i *Index) PrivateCount() (int, error) {
+	var n int
+	err := i.db.QueryRow(`SELECT count(*) FROM notes WHERE private = '1'`).Scan(&n)
+	return n, err
+}
+
 func (i *Index) ensureSchema() error {
 	_, err := i.db.Exec(`
 CREATE VIRTUAL TABLE IF NOT EXISTS notes USING fts5(

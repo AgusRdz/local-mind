@@ -44,15 +44,16 @@ The actual product: context appears automatically, safely, visibly.
 
 ---
 
-## M3 — Observability & feedback ☐
+## M3 — Observability, feedback & operability ☑
 Turn live use into the quality data Stage 0 would have gathered.
 
-- `trace.log` append on every hook invocation (query, matches, bands, scores, latency).
-- `stats [--since]`: injection counts by band, score histogram (p50/p90), latency, likely-miss rate.
-- `bad`: mark the last injection unhelpful (hard signal); folded into the miss rate.
-- Soft re-ask heuristic surfaced in `stats` but never auto-tuning thresholds.
+- ☑ `trace.log` append on every hook invocation (query, matches, bands, scores).
+- ☑ `stats [--since]`: injection counts by band, confidence percentiles (p50/p90) + histogram, effective miss rate.
+- ☑ `bad`: mark the last injection unhelpful (hard signal); folded into the miss rate.
+- ☑ `doctor`: health check — hook registered, sources exist, index built + note count/age, config valid; non-zero exit on failure.
+- ☑ `config`: `show` / `path` / `edit` / `set <key> <val>` / `add-source` / `add-ignore`.
 
-**Done when:** `stats --since 1d` reports counts, histogram, and miss rate from a seeded trace log; `bad` flips the last entry and moves the number.
+**Done:** `stats --since` reports counts, histogram, and miss rate; `bad` moves the number; `doctor` flags a missing hook and exits non-zero.
 
 ---
 

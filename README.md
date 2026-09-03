@@ -177,9 +177,14 @@ Tune the bands from what `local-mind stats` reports. Index lives at `~/.local-mi
 | `local-mind grep "<query>"` | Manual query — identical matching/banding to the hook. |
 | `local-mind init [--status]` | Install the `UserPromptSubmit` hook, or report its status. |
 | `local-mind uninstall` | Remove the hook from `settings.json`. |
-| `local-mind stats` | Injection / miss summary from the trace log. |
+| `local-mind doctor` | Health check — hook registered, sources exist, index built, config valid. Exits non-zero on failure. |
+| `local-mind stats [--since 7d]` | Injection/miss summary, effective miss rate, confidence percentiles + histogram. |
+| `local-mind bad` | Flag the last injection as unhelpful — a hard feedback signal folded into the miss rate. |
+| `local-mind config <cmd>` | `show` · `path` · `edit` · `set <key> <val>` · `add-source <path>` · `add-ignore <glob>`. |
 | `local-mind hook` | Hook entrypoint (reads stdin JSON) — invoked by Claude Code, not by hand. |
 | `local-mind version` | Print the version. |
+
+`config set` keys: `very_high`, `high` (band thresholds), `max_notes`, `max_tokens` (injection budget). Durations for `stats --since` accept `30m`, `24h`, `7d`, `2w`.
 
 ---
 

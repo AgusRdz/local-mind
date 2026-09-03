@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -139,6 +140,63 @@ func applyDefaults(cfg *Config) {
 	if cfg.Budget.MaxTokens == 0 {
 		cfg.Budget.MaxTokens = d.Budget.MaxTokens
 	}
+}
+
+// Set updates one scalar knob by name. Returns an error for unknown keys or
+// unparseable values.
+func (c *Config) Set(key, value string) error {
+	switch key {
+	case "very_high":
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("very_high must be a number: %w", err)
+		}
+		c.Bands.VeryHigh = f
+	case "high":
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("high must be a number: %w", err)
+		}
+		c.Bands.High = f
+	case "max_notes":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("max_notes must be an integer: %w", err)
+		}
+		c.Budget.MaxNotes = n
+	case "max_tokens":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("max_tokens must be an integer: %w", err)
+		}
+		c.Budget.MaxTokens = n
+	default:
+		return fmt.Errorf("unknown key %q (settable: very_high, high, max_notes, max_tokens)", key)
+	}
+	return nil
+}
+
+// AddSource appends a note root if not already present. Returns false if it was
+// already there.
+func (c *Config) AddSource(path string) bool {
+	for _, s := range c.Sources {
+		if s == path {
+			return false
+		}
+	}
+	c.Sources = append(c.Sources, path)
+	return true
+}
+
+// AddIgnore appends an ignore glob if not already present.
+func (c *Config) AddIgnore(glob string) bool {
+	for _, g := range c.Ignore {
+		if g == glob {
+			return false
+		}
+	}
+	c.Ignore = append(c.Ignore, glob)
+	return true
 }
 
 // detectSources probes well-known note roots and returns those that exist.
