@@ -106,6 +106,54 @@ func TestRebuildIncremental_SkipsUnchanged(t *testing.T) {
 	}
 }
 
+// Regression: a query that matches on a single term must not reach the body
+// band (which would dump a full note on one common word).
+func TestSearch_SingleTermCapsAtDesc(t *testing.T) {
+	idx, cfg, notes := newTestIndex(t)
+	writeFixture(t, notes, "wt.md", `---
+name: worktree-runner
+description: git worktrees CLI
+aliases: [worktree]
+---
+some body
+`)
+	if _, _, err := idx.Rebuild(cfg, false); err != nil {
+		t.Fatal(err)
+	}
+	res, err := idx.Search("worktree", cfg.Bands, 5) // single significant term
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) == 0 {
+		t.Fatal("no results")
+	}
+	if res[0].Band == BandBody {
+		t.Errorf("single-term match reached body band (conf %.2f); want desc or lower", res[0].Conf)
+	}
+}
+
+// A genuinely multi-term match still reaches the body band.
+func TestSearch_MultiTermReachesBody(t *testing.T) {
+	idx, cfg, notes := newTestIndex(t)
+	writeFixture(t, notes, "wt.md", `---
+name: worktree-runner
+description: git worktrees CLI
+aliases: [concurrent worktrees, parallel branches]
+---
+body
+`)
+	if _, _, err := idx.Rebuild(cfg, false); err != nil {
+		t.Fatal(err)
+	}
+	res, err := idx.Search("concurrent worktrees", cfg.Bands, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) == 0 || res[0].Band != BandBody {
+		t.Fatalf("multi-term structural match should reach body band, got %+v", res)
+	}
+}
+
 func TestClassify(t *testing.T) {
 	b := config.Bands{VeryHigh: 0.50, High: 0.30}
 	cases := []struct {

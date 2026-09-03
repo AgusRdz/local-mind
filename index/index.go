@@ -51,26 +51,31 @@ type Result struct {
 
 // coverage scores confidence in 0..1 from how many query terms hit a note's
 // structural fields vs. only its body — corpus-independent, unlike raw bm25.
-func coverage(terms []string, name, aliases, description, headings, body string) float64 {
+// It also returns how many distinct query terms matched anywhere, used to gate
+// the body band (a single common word must not justify dumping a full note).
+func coverage(terms []string, name, aliases, description, headings, body string) (float64, int) {
 	if len(terms) == 0 {
-		return 0
+		return 0, 0
 	}
 	structural := strings.ToLower(name + " " + aliases + " " + description + " " + headings)
 	lowerBody := strings.ToLower(body)
 	var sum float64
+	matched := 0
 	for _, t := range terms {
 		switch {
 		case strings.Contains(structural, t):
 			sum += structuralHit
+			matched++
 		case strings.Contains(lowerBody, t):
 			sum += bodyHit
+			matched++
 		}
 	}
 	conf := sum / float64(len(terms))
 	if conf > 1 {
 		conf = 1
 	}
-	return conf
+	return conf, matched
 }
 
 // Index wraps the SQLite connection.
@@ -275,8 +280,13 @@ LIMIT ?`, bm25Weights)
 		}
 		r.Private = priv == 1
 		r.rank = rank
-		r.Conf = coverage(terms, r.Name, aliases, r.Description, headings, r.Body)
-		r.Band = classify(r.Conf, bands)
+		conf, matched := coverage(terms, r.Name, aliases, r.Description, headings, r.Body)
+		r.Conf = conf
+		r.Band = classify(conf, bands)
+		// A single matched term is weak evidence: never dump a full body on it.
+		if r.Band == BandBody && matched < 2 {
+			r.Band = BandDesc
+		}
 		r.Modified = mtimeOf(i, r.Path)
 		out = append(out, r)
 	}
@@ -321,6 +331,11 @@ var (
 		"out": true, "our": true, "are": true, "you": true, "your": true,
 		"into": true, "last": true, "month": true, "week": true, "have": true,
 		"has": true, "can": true, "not": true, "but": true, "get": true,
+		// low-signal filler that should never anchor a match
+		"now": true, "just": true, "got": true, "let": true, "use": true,
+		"using": true, "want": true, "need": true, "make": true, "also": true,
+		"really": true, "thing": true, "way": true, "any": true, "some": true,
+		"about": true, "there": true, "here": true, "then": true, "than": true,
 	}
 )
 

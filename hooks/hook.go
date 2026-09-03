@@ -93,20 +93,35 @@ func build(results []index.Result, budget config.Budget) (ctx string, injected, 
 		if len(injected) >= budget.MaxNotes {
 			continue
 		}
+		remaining := budget.MaxTokens - tokens
+		if remaining <= 0 {
+			break // budget exhausted
+		}
 		var block string
 		switch r.Band {
 		case index.BandBody:
-			block = fmt.Sprintf("[from %s, updated %s]\n%s\n", rel(r.Path), age(r.Modified), r.Body)
+			// Truncate the body to the remaining budget rather than injecting it
+			// whole — a single large note must never blow the token cap.
+			header := fmt.Sprintf("[from %s, updated %s]\n", rel(r.Path), age(r.Modified))
+			body := r.Body
+			if estTokens(header+body+"\n") > remaining {
+				const marker = "\n…[truncated]"
+				maxChars := remaining*charsPerToken - len(header) - len(marker) - 1
+				if maxChars < 0 {
+					maxChars = 0
+				}
+				body = truncateRunes(body, maxChars) + marker
+			}
+			block = header + body + "\n"
 		case index.BandDesc:
 			block = fmt.Sprintf("[see %s, updated %s] %s\n", rel(r.Path), age(r.Modified), r.Description)
-		}
-		cost := estTokens(block)
-		if tokens+cost > budget.MaxTokens && len(injected) > 0 {
-			continue // would blow the budget; keep what we have
+			if estTokens(block) > remaining {
+				continue // description alone won't fit the remaining budget; skip it
+			}
 		}
 		sb.WriteString(block)
 		sb.WriteString("\n")
-		tokens += cost
+		tokens += estTokens(block)
 		injected = append(injected, r)
 	}
 	if len(injected) == 0 {
@@ -148,7 +163,30 @@ func trace(prompt string, injected, candidates []index.Result) {
 	}
 }
 
-func estTokens(s string) int { return len(s)/4 + 1 }
+// charsPerToken is a rough bytes-per-token estimate for budgeting.
+const charsPerToken = 4
+
+func estTokens(s string) int { return len(s)/charsPerToken + 1 }
+
+// truncateRunes returns s clipped to at most maxChars bytes without splitting a
+// UTF-8 rune. Runs in O(cut point): `for i := range s` yields rune-boundary
+// byte offsets, so we keep the largest boundary that fits.
+func truncateRunes(s string, maxChars int) string {
+	if maxChars <= 0 {
+		return ""
+	}
+	if len(s) <= maxChars {
+		return s
+	}
+	last := 0
+	for i := range s {
+		if i > maxChars {
+			break
+		}
+		last = i
+	}
+	return s[:last]
+}
 
 func rel(path string) string {
 	// Show the last two path segments for readability.
