@@ -51,10 +51,13 @@ mkdir -p "$INSTALL_DIR"
 TMP="${INSTALL_DIR}/local-mind${EXT}.tmp"
 curl -fsSL "$URL" -o "$TMP"
 
-# --- verify SHA256 ---
-CHECKSUMS=$(curl -fsSL "$CHECKSUMS_URL") || { echo "failed to download checksums.txt" >&2; rm -f "$TMP"; exit 1; }
-EXPECTED=$(printf '%s' "$CHECKSUMS" | grep " ${BINARY}$" | awk '{print $1}')
-[ -z "$EXPECTED" ] && { echo "checksum not found for ${BINARY}" >&2; rm -f "$TMP"; exit 1; }
+# --- verify SHA256 (download the exact checksums file — do NOT round-trip
+#     through a shell variable, which strips the trailing newline the
+#     signature is computed over) ---
+SUMS="${TMP}.sums"
+curl -fsSL "$CHECKSUMS_URL" -o "$SUMS" || { echo "failed to download checksums.txt" >&2; rm -f "$TMP"; exit 1; }
+EXPECTED=$(grep " ${BINARY}$" "$SUMS" | awk '{print $1}')
+[ -z "$EXPECTED" ] && { echo "checksum not found for ${BINARY}" >&2; rm -f "$TMP" "$SUMS"; exit 1; }
 if command -v sha256sum >/dev/null 2>&1; then
   ACTUAL=$(sha256sum "$TMP" | awk '{print $1}')
 elif command -v shasum >/dev/null 2>&1; then
@@ -63,22 +66,22 @@ else
   echo "warning: no sha256 tool, skipping checksum verification" >&2
   ACTUAL="$EXPECTED"
 fi
-[ "$ACTUAL" != "$EXPECTED" ] && { echo "checksum mismatch: expected $EXPECTED, got $ACTUAL" >&2; rm -f "$TMP"; exit 1; }
+[ "$ACTUAL" != "$EXPECTED" ] && { echo "checksum mismatch: expected $EXPECTED, got $ACTUAL" >&2; rm -f "$TMP" "$SUMS"; exit 1; }
 
 # --- optional Ed25519 signature verification (if signed + public_key.pem present) ---
 PUBKEY="$(dirname "$0")/public_key.pem"
 if [ -f "$PUBKEY" ] && command -v openssl >/dev/null 2>&1; then
-  if SIG=$(curl -fsSL "$SIG_URL" 2>/dev/null); then
-    printf '%s' "$CHECKSUMS" > "${TMP}.sums"
-    printf '%s' "$SIG" | xxd -r -p > "${TMP}.sig" 2>/dev/null || true
-    if [ -s "${TMP}.sig" ] && openssl pkeyutl -verify -pubin -inkey "$PUBKEY" -rawin -in "${TMP}.sums" -sigfile "${TMP}.sig" >/dev/null 2>&1; then
+  if curl -fsSL "$SIG_URL" -o "${TMP}.sig.hex" 2>/dev/null; then
+    xxd -r -p "${TMP}.sig.hex" > "${TMP}.sig" 2>/dev/null || true
+    if [ -s "${TMP}.sig" ] && openssl pkeyutl -verify -pubin -inkey "$PUBKEY" -rawin -in "$SUMS" -sigfile "${TMP}.sig" >/dev/null 2>&1; then
       echo "signature verified"
     else
       echo "WARNING: signature verification failed" >&2
     fi
-    rm -f "${TMP}.sums" "${TMP}.sig"
+    rm -f "${TMP}.sig.hex" "${TMP}.sig"
   fi
 fi
+rm -f "$SUMS"
 
 mv "$TMP" "${INSTALL_DIR}/local-mind${EXT}"
 chmod +x "${INSTALL_DIR}/local-mind${EXT}"

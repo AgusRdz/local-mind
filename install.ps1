@@ -25,31 +25,34 @@ $Destination = Join-Path $InstallDir "local-mind.exe"
 $Tmp = "$Destination.tmp"
 Invoke-WebRequest -Uri $Url -OutFile $Tmp
 
-# --- verify SHA256 ---
+# --- verify SHA256 (download the exact checksums file — do NOT reconstruct it
+#     from a string, which changes the bytes the signature is computed over) ---
+$SumsFile = "$Tmp.sums"
 try {
-    $Checksums = Invoke-RestMethod $ChecksumsUrl
+    Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $SumsFile
 } catch {
     Write-Error "failed to download checksums.txt: $_"; Remove-Item -Force $Tmp -ErrorAction SilentlyContinue; exit 1
 }
+$Checksums = Get-Content $SumsFile -Raw
 $Line = $Checksums -split "`n" | Where-Object { $_ -match "\s$([regex]::Escape($Binary))$" } | Select-Object -First 1
-if (-not $Line) { Write-Error "checksum not found for $Binary"; Remove-Item -Force $Tmp -ErrorAction SilentlyContinue; exit 1 }
+if (-not $Line) { Write-Error "checksum not found for $Binary"; Remove-Item -Force $Tmp, $SumsFile -ErrorAction SilentlyContinue; exit 1 }
 $Expected = ($Line -split '\s+')[0].Trim().ToLower()
 $Actual = (Get-FileHash -Algorithm SHA256 $Tmp).Hash.ToLower()
-if ($Actual -ne $Expected) { Write-Error "checksum mismatch: expected $Expected, got $Actual"; Remove-Item -Force $Tmp -ErrorAction SilentlyContinue; exit 1 }
+if ($Actual -ne $Expected) { Write-Error "checksum mismatch: expected $Expected, got $Actual"; Remove-Item -Force $Tmp, $SumsFile -ErrorAction SilentlyContinue; exit 1 }
 
 # --- optional Ed25519 signature verification ---
 $PubKey = Join-Path $PSScriptRoot "public_key.pem"
 if ((Test-Path $PubKey) -and (Get-Command openssl -ErrorAction SilentlyContinue)) {
     try {
         $Sig = (Invoke-RestMethod $SigUrl).Trim()
-        $SumsFile = "$Tmp.sums"; $SigFile = "$Tmp.sig"
-        [System.IO.File]::WriteAllText($SumsFile, $Checksums)
+        $SigFile = "$Tmp.sig"
         [System.IO.File]::WriteAllBytes($SigFile, ($Sig -split '(..)' | Where-Object { $_ } | ForEach-Object { [Convert]::ToByte($_, 16) }))
         & openssl pkeyutl -verify -pubin -inkey $PubKey -rawin -in $SumsFile -sigfile $SigFile *> $null
         if ($LASTEXITCODE -eq 0) { Write-Host "signature verified" } else { Write-Warning "signature verification failed" }
-        Remove-Item -Force $SumsFile, $SigFile -ErrorAction SilentlyContinue
+        Remove-Item -Force $SigFile -ErrorAction SilentlyContinue
     } catch { }
 }
+Remove-Item -Force $SumsFile -ErrorAction SilentlyContinue
 
 Move-Item -Force $Tmp $Destination
 Write-Host "installed local-mind to $Destination"
