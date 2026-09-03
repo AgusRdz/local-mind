@@ -1,0 +1,15 @@
+bin/
+*.exe
+*.db
+*.out
+.claude/
+nul
+
+# local dev index/config artifacts
+.local-mind/
+
+# signing key (never commit)
+signing.pem
+
+# AI agent artifacts
+.jules/
