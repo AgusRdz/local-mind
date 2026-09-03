@@ -16,6 +16,7 @@ import (
 	"github.com/AgusRdz/local-mind/config"
 	"github.com/AgusRdz/local-mind/hooks"
 	"github.com/AgusRdz/local-mind/index"
+	"github.com/AgusRdz/local-mind/updater"
 )
 
 // version is set via -ldflags "-X main.version=...".
@@ -45,6 +46,8 @@ func main() {
 		cmdDoctor()
 	case "config":
 		cmdConfig(os.Args[2:])
+	case "update":
+		fail(updater.Run(version, publicKeyPEM))
 	case "version", "--version", "-v":
 		fmt.Printf("local-mind %s\n", version)
 	case "help", "--help", "-h":
@@ -476,6 +479,7 @@ usage:
   local-mind stats [--since 7d]        injection/miss summary + confidence histogram
   local-mind bad                       flag the last injection as unhelpful
   local-mind config <cmd>              show | path | edit | set <k> <v> | add-source | add-ignore
+  local-mind update                    self-update to the latest signed release
   local-mind hook                      hook entrypoint (reads stdin JSON)
   local-mind version                   print version
 

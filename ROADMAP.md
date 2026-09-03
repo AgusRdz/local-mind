@@ -76,7 +76,8 @@ Ship it like chop: signed, checksummed.
 - ☑ `README.md` + `docs/RELEASING.md` (signing setup, release + install steps).
 - ☐ Push the workflows (blocked on `gh auth refresh -s workflow`).
 - ☐ Cut `v0.1.0` and verify install from the release.
-- ☐ (deferred) `update` self-update command; Homebrew tap (now that the repo is public).
+- ☑ `update` self-update command — SHA256 + embedded-key Ed25519 verification, atomic self-replace (Windows-aware).
+- ☐ (deferred) Homebrew tap (now that the repo is public).
 
 **Done when:** a `v0.1.0` tag produces a GitHub Release with cross-platform binaries + checksums, and `install.sh`/`install.ps1` install and verify a binary from it.
 
