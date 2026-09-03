@@ -238,7 +238,7 @@ func cmdDoctor() {
 		}
 	}
 
-	fmt.Printf("local-mind doctor (v%s)\n", version)
+	fmt.Printf("local-mind doctor (%s)\n", version)
 
 	exe, _ := os.Executable()
 	check(exe != "", true, "binary", exe)
