@@ -152,6 +152,22 @@ func cmdInit(args []string) {
 		return
 	}
 	fail(hooks.Install())
+
+	cfg, err := config.Load()
+	fail(err)
+	if len(cfg.Sources) == 0 {
+		if candidates := config.DetectCandidates(); len(candidates) > 0 {
+			fmt.Println("\nFound possible note directories:")
+			if promptAddCandidates(&cfg, candidates) > 0 {
+				fail(config.Save(cfg))
+			}
+		} else {
+			fmt.Println()
+			promptManualSource(&cfg)
+			fail(config.Save(cfg))
+		}
+	}
+
 	fmt.Println("\nNext: run `local-mind rebuild` to build the index, then start a new Claude Code session.")
 }
 
@@ -354,7 +370,9 @@ func cmdConfig(args []string) {
 		}
 		cfg, err := config.Load()
 		fail(err)
-		if cfg.AddSource(args[1]) {
+		added, err := cfg.AddSource(args[1])
+		fail(err)
+		if added {
 			fail(config.Save(cfg))
 			fmt.Printf("added source: %s\n(run `local-mind rebuild` to index it)\n", args[1])
 		} else {
@@ -373,10 +391,75 @@ func cmdConfig(args []string) {
 		} else {
 			fmt.Println("ignore glob already present")
 		}
+	case "detect-sources":
+		cfg, err := config.Load()
+		fail(err)
+		var candidates []config.Candidate
+		for _, c := range config.DetectCandidates() {
+			known := false
+			for _, s := range cfg.Sources {
+				if s == c.Path {
+					known = true
+					break
+				}
+			}
+			if !known {
+				candidates = append(candidates, c)
+			}
+		}
+		if len(candidates) == 0 {
+			fmt.Println("no new note directories found")
+			return
+		}
+		if promptAddCandidates(&cfg, candidates) > 0 {
+			fail(config.Save(cfg))
+			fmt.Println("(run `local-mind rebuild` to index the new source(s))")
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown config subcommand: %s\n", sub)
-		fmt.Fprintln(os.Stderr, "  show | path | edit | set <key> <val> | add-source <path> | add-ignore <glob>")
+		fmt.Fprintln(os.Stderr, "  show | path | edit | set <key> <val> | add-source <path> | add-ignore <glob> | detect-sources")
 		os.Exit(1)
+	}
+}
+
+// promptAddCandidates asks (per candidate) whether to add it as a source,
+// and returns how many were added.
+func promptAddCandidates(cfg *config.Config, candidates []config.Candidate) int {
+	added := 0
+	for _, c := range candidates {
+		if !confirm(fmt.Sprintf("Add %s (%s) as a source?", c.Path, c.Label)) {
+			continue
+		}
+		ok, err := cfg.AddSource(c.Path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  skipped: %v\n", err)
+			continue
+		}
+		if ok {
+			added++
+		}
+	}
+	return added
+}
+
+// promptManualSource asks for a single note directory path, validating it
+// against AddSource. An empty line skips.
+func promptManualSource(cfg *config.Config) {
+	fmt.Print("No note directories found automatically.\nEnter a path to your notes (or press Enter to skip): ")
+	r := bufio.NewReader(os.Stdin)
+	for attempt := 0; attempt < 2; attempt++ {
+		line, _ := r.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if line == "" {
+			return
+		}
+		if ok, err := cfg.AddSource(line); err != nil {
+			fmt.Printf("  %v\nTry again (or press Enter to skip): ", err)
+			continue
+		} else if ok {
+			fmt.Printf("added source: %s\n", line)
+		}
+		return
 	}
 }
 
@@ -511,7 +594,7 @@ usage:
   local-mind doctor                    health check (hook, sources, index, config)
   local-mind stats [--since 7d]        injection/miss summary + confidence histogram
   local-mind bad                       flag the last injection as unhelpful
-  local-mind config <cmd>              show | path | edit | set <k> <v> | add-source | add-ignore
+  local-mind config <cmd>              show | path | edit | set <k> <v> | add-source | add-ignore | detect-sources
   local-mind update                    self-update to the latest signed release
   local-mind suggest-aliases <path>|--all   propose frontmatter aliases via the claude CLI
   local-mind links                     report [[wikilinks]] that don't resolve to any note

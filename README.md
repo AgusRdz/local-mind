@@ -149,7 +149,7 @@ The hook injects context on stdout (only what fits the budget) and prints its tr
 
 ## Configuration
 
-`~/.local-mind/config.yml` is scaffolded on first run and auto-detects your vault + memory dirs:
+`~/.local-mind/config.yml` is scaffolded on first run and auto-detects your Claude Code memory dir. `local-mind init` (and `local-mind config detect-sources` any time after) additionally looks for Obsidian vaults (read from Obsidian's own vault registry) and other common notes folders, and prompts you to add each one it finds — nothing is added without confirmation.
 
 ```yaml
 sources:                       # note roots to index (absolute paths)
@@ -180,7 +180,7 @@ Tune the bands from what `local-mind stats` reports. Index lives at `~/.local-mi
 | `local-mind doctor` | Health check — hook registered, sources exist, index built, config valid. Exits non-zero on failure. |
 | `local-mind stats [--since 7d]` | Injection/miss summary, effective miss rate, confidence percentiles + histogram. |
 | `local-mind bad` | Flag the last injection as unhelpful — a hard feedback signal folded into the miss rate. |
-| `local-mind config <cmd>` | `show` · `path` · `edit` · `set <key> <val>` · `add-source <path>` · `add-ignore <glob>`. |
+| `local-mind config <cmd>` | `show` · `path` · `edit` · `set <key> <val>` · `add-source <path>` · `add-ignore <glob>` · `detect-sources`. |
 | `local-mind update` | Self-update to the latest release — verifies SHA256 + Ed25519 signature (embedded key) before replacing the binary in place. |
 | `local-mind suggest-aliases <path>\|--all [--dry-run] [--yes] [--force] [--model <name>]` | Propose frontmatter aliases (and a description if missing) via the `claude` CLI, then write on confirm. `--all` backfills every note missing aliases (`--force` re-does existing ones). Authoring-time only — retrieval stays LLM-free. |
 | `local-mind links` | Report `[[wikilinks]]` in note bodies that don't resolve to any indexed note's name — an authoring backlog, not a health check. |

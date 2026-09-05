@@ -41,7 +41,11 @@ type Config struct {
 func Defaults() Config {
 	return Config{
 		Sources: detectSources(),
-		Ignore:  []string{"**/node_modules/**", "**/.git/**", "**/templates/**"},
+		Ignore: []string{
+			"**/node_modules/**", "**/.git/**", "**/templates/**",
+			"**/.obsidian/**", "**/.trash/**",
+			"**/logseq/bak/**", "**/logseq/.recycle/**",
+		},
 		Bands:   Bands{VeryHigh: 0.60, High: 0.35},
 		Budget:  Budget{MaxNotes: 3, MaxTokens: 1200},
 	}
@@ -176,16 +180,23 @@ func (c *Config) Set(key, value string) error {
 	return nil
 }
 
-// AddSource appends a note root if not already present. Returns false if it was
-// already there.
-func (c *Config) AddSource(path string) bool {
+// AddSource appends a note root if it exists and isn't already present.
+// Returns false (no error) if it was already there.
+func (c *Config) AddSource(path string) (bool, error) {
 	for _, s := range c.Sources {
 		if s == path {
-			return false
+			return false, nil
 		}
 	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	if !fi.IsDir() {
+		return false, fmt.Errorf("%s: not a directory", path)
+	}
 	c.Sources = append(c.Sources, path)
-	return true
+	return true, nil
 }
 
 // AddIgnore appends an ignore glob if not already present.
