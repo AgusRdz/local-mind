@@ -2,6 +2,11 @@
 
 All notable changes to local-mind are documented here.
 
+## [0.4.0] - 2026-09-05
+
+### Features
+- Show live per-file progress instead of silent hang
+([fda806e](https://github.com/AgusRdz/local-mind/commit/fda806e439520216a6bcd1ff3405d75ef6450136))
 ## [0.3.0] - 2026-09-05
 
 ### Features
