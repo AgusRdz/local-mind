@@ -2,6 +2,11 @@
 
 All notable changes to local-mind are documented here.
 
+## [0.3.0] - 2026-09-05
+
+### Features
+- Detect Obsidian vaults and other note dirs, add interactive setup
+([2de1d6f](https://github.com/AgusRdz/local-mind/commit/2de1d6f86c3f0e64a95a98857f2a1b8439e8afd1))
 ## [0.2.0] - 2026-09-05
 
 ### Documentation
