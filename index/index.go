@@ -145,6 +145,13 @@ CREATE TABLE IF NOT EXISTS meta (
 // false the index is dropped and rebuilt; when true, only files whose mtime
 // changed since the last run are re-indexed.
 func (i *Index) Rebuild(cfg config.Config, incremental bool) (indexed, skipped int, err error) {
+	return i.RebuildProgress(cfg, incremental, nil)
+}
+
+// RebuildProgress is Rebuild, additionally invoking onProgress (if non-nil)
+// with each file's path right before it's read — the point where a slow or
+// unresponsive filesystem (e.g. a not-yet-downloaded iCloud file) blocks.
+func (i *Index) RebuildProgress(cfg config.Config, incremental bool, onProgress func(path string)) (indexed, skipped int, err error) {
 	if !incremental {
 		if _, err = i.db.Exec(`DELETE FROM notes; DELETE FROM meta;`); err != nil {
 			return 0, 0, err
@@ -219,6 +226,9 @@ func (i *Index) Rebuild(cfg config.Config, incremental bool) (indexed, skipped i
 				_, _ = delNote.Exec(path)
 			}
 
+			if onProgress != nil {
+				onProgress(path)
+			}
 			data, rerr := os.ReadFile(path)
 			if rerr != nil {
 				return nil

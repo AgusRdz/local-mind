@@ -76,8 +76,23 @@ func cmdRebuild(args []string) {
 	fail(err)
 	defer idx.Close()
 
+	isTTY := false
+	if fi, ferr := os.Stdout.Stat(); ferr == nil {
+		isTTY = fi.Mode()&os.ModeCharDevice != 0
+	}
+	seen := 0
+	progress := func(path string) {
+		seen++
+		if isTTY {
+			fmt.Printf("\r\033[Kindexing %d: %s", seen, truncate(path, 80))
+		}
+	}
+
 	start := time.Now()
-	indexed, skipped, err := idx.Rebuild(cfg, incremental)
+	indexed, skipped, err := idx.RebuildProgress(cfg, incremental, progress)
+	if isTTY && seen > 0 {
+		fmt.Print("\r\033[K")
+	}
 	fail(err)
 	fmt.Printf("indexed %d note(s)", indexed)
 	if incremental {
