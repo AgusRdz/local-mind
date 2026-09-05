@@ -62,24 +62,22 @@ Kill the alias-curation rot and keep the index fresh with zero thought.
 
 - ☑ `suggest-aliases <path> [--dry-run] [--yes] [--model]`: offline `claude -p` call proposing `aliases` + a description (only if missing); shows current vs proposed, writes valid frontmatter on confirm (inline/block/no-frontmatter all handled). Read-time path stays LLM-free.
 - ☑ `suggest-aliases --all [--force]`: batch-backfill every note missing aliases (respects sources + ignore globs), one confirm, per-note progress, skips already-aliased notes so it's resumable.
+- ☑ `links`: reports `[[wikilinks]]` in note bodies that don't resolve to any indexed note's name (frontmatter `name:` or filename stem) — surfaces the authoring backlog implied by the memory system's "link liberally, even to notes that don't exist yet" convention.
 - ☐ (deferred) git `post-commit` snippet to auto-reindex changed notes.
 
-**Done:** `suggest-aliases` (single + batch) proposes aliases and writes valid frontmatter that `rebuild` then indexes; frontmatter surgery + note collection covered by unit tests.
+**Done:** `suggest-aliases` (single + batch) proposes aliases and writes valid frontmatter that `rebuild` then indexes; frontmatter surgery + note collection covered by unit tests. `links` resolution and reporting covered by unit tests.
 
 ---
 
-## M5 — Distribution ◐
+## M5 — Distribution ☑
 Ship it like chop: signed, checksummed.
 
 - ☑ `install.ps1` + `install.sh` — anonymous download (chop-style), SHA256 verify, optional Ed25519 signature verify, PATH wiring.
-- ☑ `.github/workflows`: `ci.yml` (test on push/PR) + `release.yml` (cross-build 5 targets, checksums, optional sign, GitHub Release + generated notes, provenance attestation) on `v*` tags.
+- ☑ `.github/workflows`: `ci.yml` (test on push/PR) + `release.yml` (cross-build 5 targets, checksums, optional sign, GitHub Release + generated notes, provenance attestation) on `v*` tags. Pushed.
 - ☑ `README.md` + `docs/RELEASING.md` (signing setup, release + install steps).
-- ☐ Push the workflows (blocked on `gh auth refresh -s workflow`).
-- ☐ Cut `v0.1.0` and verify install from the release.
 - ☑ `update` self-update command — SHA256 + embedded-key Ed25519 verification, atomic self-replace (Windows-aware).
-- ☐ (deferred) Homebrew tap (now that the repo is public).
 
-**Done when:** a `v0.1.0` tag produces a GitHub Release with cross-platform binaries + checksums, and `install.sh`/`install.ps1` install and verify a binary from it.
+**Done:** `v0.1.1`-`v0.1.5` tags have each produced a GitHub Release with cross-platform binaries + checksums, verified installable via `install.sh`/`install.ps1`.
 
 ---
 
@@ -88,6 +86,7 @@ Ship it like chop: signed, checksummed.
 - Formal eval harness with a labeled corpus.
 - MCP tool interface for explicit model-reasoned queries.
 - Cross-machine sync beyond git.
+- Homebrew tap (now that the repo is public).
 
 ---
 
