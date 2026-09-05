@@ -50,6 +50,8 @@ func main() {
 		fail(updater.Run(version, publicKeyPEM))
 	case "suggest-aliases":
 		cmdSuggestAliases(os.Args[2:])
+	case "links":
+		cmdLinks()
 	case "version", "--version", "-v":
 		fmt.Printf("local-mind %s\n", version)
 	case "help", "--help", "-h":
@@ -108,6 +110,35 @@ func cmdGrep(args []string) {
 			fmt.Printf("        %s\n", truncate(r.Description, 100))
 		}
 	}
+}
+
+func cmdLinks() {
+	idx, err := index.Open()
+	fail(err)
+	defer idx.Close()
+
+	dangling, err := idx.DanglingLinks()
+	fail(err)
+	if len(dangling) == 0 {
+		fmt.Println("no dangling links")
+		return
+	}
+
+	paths := make([]string, 0, len(dangling))
+	for p := range dangling {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	total := 0
+	for _, p := range paths {
+		fmt.Println(p)
+		for _, target := range dangling[p] {
+			fmt.Printf("  [[%s]]  (not found)\n", target)
+			total++
+		}
+	}
+	fmt.Printf("\n%d dangling link(s) across %d note(s)\n", total, len(dangling))
 }
 
 func cmdInit(args []string) {
@@ -483,6 +514,7 @@ usage:
   local-mind config <cmd>              show | path | edit | set <k> <v> | add-source | add-ignore
   local-mind update                    self-update to the latest signed release
   local-mind suggest-aliases <path>|--all   propose frontmatter aliases via the claude CLI
+  local-mind links                     report [[wikilinks]] that don't resolve to any note
   local-mind hook                      hook entrypoint (reads stdin JSON)
   local-mind version                   print version
 

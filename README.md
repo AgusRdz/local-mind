@@ -183,6 +183,7 @@ Tune the bands from what `local-mind stats` reports. Index lives at `~/.local-mi
 | `local-mind config <cmd>` | `show` · `path` · `edit` · `set <key> <val>` · `add-source <path>` · `add-ignore <glob>`. |
 | `local-mind update` | Self-update to the latest release — verifies SHA256 + Ed25519 signature (embedded key) before replacing the binary in place. |
 | `local-mind suggest-aliases <path>\|--all [--dry-run] [--yes] [--force] [--model <name>]` | Propose frontmatter aliases (and a description if missing) via the `claude` CLI, then write on confirm. `--all` backfills every note missing aliases (`--force` re-does existing ones). Authoring-time only — retrieval stays LLM-free. |
+| `local-mind links` | Report `[[wikilinks]]` in note bodies that don't resolve to any indexed note's name — an authoring backlog, not a health check. |
 | `local-mind hook` | Hook entrypoint (reads stdin JSON) — invoked by Claude Code, not by hand. |
 | `local-mind version` | Print the version. |
 
